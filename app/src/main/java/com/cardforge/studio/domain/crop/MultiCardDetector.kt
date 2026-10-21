@@ -130,8 +130,12 @@ class GradientMultiCardDetector(private val maxDim: Int = 512) : MultiCardDetect
         val minEdges = max(20, (total * 0.01).toInt())
 
         val regions = ArrayList<CardRegion>()
-        for ((x0, x1) in colBands) {
-            for ((y0, y1) in rowBands) {
+        for (colBand in colBands) {
+            val x0 = colBand.first
+            val x1 = colBand.last
+            for (rowBand in rowBands) {
+                val y0 = rowBand.first
+                val y1 = rowBand.last
                 // Bounding box of edges inside this band cell.
                 var bx0 = Int.MAX_VALUE; var by0 = Int.MAX_VALUE
                 var bx1 = -1; var by1 = -1; var inCell = 0
