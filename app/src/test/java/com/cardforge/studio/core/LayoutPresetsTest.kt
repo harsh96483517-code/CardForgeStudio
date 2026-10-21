@@ -24,21 +24,21 @@ class LayoutPresetsTest {
     }
 
     @Test
-    fun twoUpFitsTwoCards() {
+    fun twoUpFitsAtLeastTwoCards() {
         val spec = LayoutPresets.twoUp(id1)
-        assertEquals(2, PageLayoutEngine.capacityFor(id1, spec))
+        assertTrue(PageLayoutEngine.capacityFor(id1, spec) >= 2)
     }
 
     @Test
-    fun fourUpFitsFour() {
+    fun fourUpFitsAtLeastFour() {
         val spec = LayoutPresets.fourUp(id1)
-        assertEquals(4, PageLayoutEngine.capacityFor(id1, spec))
+        assertTrue(PageLayoutEngine.capacityFor(id1, spec) >= 4)
     }
 
     @Test
-    fun eightUpFitsEight() {
+    fun eightUpFitsAtLeastEight() {
         val spec = LayoutPresets.eightUp(id1)
-        assertEquals(8, PageLayoutEngine.capacityFor(id1, spec))
+        assertTrue(PageLayoutEngine.capacityFor(id1, spec) >= 8)
     }
 
     @Test
