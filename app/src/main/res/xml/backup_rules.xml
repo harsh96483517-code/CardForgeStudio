@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Never back up imported documents or crops. -->
+    <exclude domain="file" path="projects" />
+    <exclude domain="file" path="cards" />
+    <exclude domain="cache" path="." />
+</full-backup-content>
