@@ -25,6 +25,12 @@ Arrange on A4 → Preview → Export.
 - **Import** multi-page PDFs (rasterised with `PdfRenderer`) and JPG/JPEG/PNG.
 - **Automatic rectangular card detection** with a low-confidence flag that asks
   for confirmation instead of silently discarding content.
+- **Auto-split a layout page** (e.g. the Aadhaar print sheet) into its **front
+  and back card** in one tap, or into every card on the page — then drop the
+  pair straight onto one A4, side by side.
+- **Front + back side by side**, or **duplex** (front and back on separate
+  pages) with configurable flip direction.
+- **Centred presets**: 2-up / 4-up / 6-up / 8-up grids on A4.
 - **Manual crop** with draggable corners and **perspective correction** for
   photographed documents.
 - **Front/back** support: assign both sides to one card, side-by-side preview.

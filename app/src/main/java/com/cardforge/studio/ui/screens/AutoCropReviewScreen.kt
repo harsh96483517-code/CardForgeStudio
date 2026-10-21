@@ -46,6 +46,7 @@ import com.cardforge.studio.ui.components.BannerTone
 import com.cardforge.studio.ui.components.GlassCard
 import com.cardforge.studio.ui.components.InfoBanner
 import com.cardforge.studio.ui.components.ScreenScaffold
+import com.cardforge.studio.ui.components.SectionHeader
 import com.cardforge.studio.ui.navigation.Routes
 import kotlin.math.sqrt
 
@@ -116,6 +117,31 @@ fun AutoCropReviewScreen(vm: WorkspaceViewModel, nav: NavController) {
             modifier = Modifier.fillMaxWidth(),
             enabled = state.project.cards.isNotEmpty() && !state.busy
         ) { Text("Accept crop as back of last card") }
+
+        GlassCard {
+            SectionHeader("Auto-split the whole page")
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Layout pages (like the Aadhaar print sheet) contain the front and back " +
+                    "card together. Detect both in one go and drop them on a single A4, side by side.",
+                style = MaterialTheme.typography.bodyMedium
+            )
+            Spacer(Modifier.height(10.dp))
+            Button(
+                onClick = {
+                    vm.autoSplitIntoFrontBack()
+                    nav.navigate(Routes.LAYOUT)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.busy
+            ) { Text("Split into front + back (one A4)") }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { vm.autoSplitIntoIndividualCards() },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.busy
+            ) { Text("Split into all cards on the page") }
+        }
 
         GlassCard {
             Text("Tip", style = MaterialTheme.typography.titleMedium)

@@ -28,8 +28,12 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.cardforge.studio.core.layout.LayoutPresets
+import com.cardforge.studio.core.model.CardSide
 import com.cardforge.studio.core.model.Orientation
 import com.cardforge.studio.core.model.PaperKind
+import com.cardforge.studio.core.model.SidesMode
+import com.cardforge.studio.core.model.SizeMm
 import com.cardforge.studio.ui.WorkspaceViewModel
 import com.cardforge.studio.ui.components.BannerTone
 import com.cardforge.studio.ui.components.GlassCard
@@ -49,12 +53,12 @@ fun A4LayoutEditorScreen(vm: WorkspaceViewModel, nav: NavController) {
     val layout = state.layout
     var page by remember { mutableIntStateOf(0) }
 
-    // Decode a front image per card for the sheet preview.
+    // Decode the front and back images per card for the sheet preview.
     val images = remember(state.project.cards) {
         state.project.cards.associate { c ->
-            c.id to (c.frontImage?.let { path ->
-                runCatching { BitmapFactory.decodeFile(path)?.asImageBitmap() }.getOrNull()
-            })
+            val f = c.frontImage?.let { runCatching { BitmapFactory.decodeFile(it)?.asImageBitmap() }.getOrNull() }
+            val b = c.backImage?.let { runCatching { BitmapFactory.decodeFile(it)?.asImageBitmap() }.getOrNull() }
+            c.id to (f to b)
         }
     }
 
@@ -92,6 +96,56 @@ fun A4LayoutEditorScreen(vm: WorkspaceViewModel, nav: NavController) {
         }
 
         GlassCard {
+            SectionHeader("Card sides", "Print the front and back together, or one at a time")
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SidesMode.entries.forEach { mode ->
+                    FilterChip(
+                        selected = spec.sidesMode == mode,
+                        onClick = { vm.setSidesMode(mode) },
+                        label = { Text(mode.label) }
+                    )
+                }
+            }
+        }
+
+        GlassCard {
+            SectionHeader("Quick presets", "Centred grids on A4")
+            Spacer(Modifier.height(8.dp))
+            val cardSize = state.project.cards.firstOrNull()?.sizeMm ?: SizeMm(85.6, 54.0)
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                listOf(
+                    "2-up" to (2 to 1),
+                    "4-up" to (2 to 2),
+                    "6-up" to (2 to 3),
+                    "8-up" to (2 to 4)
+                ).forEach { (label, grid) ->
+                    FilterChip(
+                        selected = false,
+                        onClick = {
+                            vm.applySheetPreset(LayoutPresets.gridSpec(cardSize, grid.first, grid.second))
+                        },
+                        label = { Text(label) }
+                    )
+                }
+                FilterChip(
+                    selected = spec.sidesMode == SidesMode.SIDE_BY_SIDE && spec.marginMm < 20.0,
+                    onClick = {
+                        vm.setSidesMode(SidesMode.SIDE_BY_SIDE)
+                        vm.applySheetPreset(LayoutPresets.twoUp(cardSize))
+                    },
+                    label = { Text("Front + back") }
+                )
+            }
+        }
+
+        GlassCard {
             SectionHeader("Spacing")
             Spacer(Modifier.height(6.dp))
             Text("Margin: ${fmt(spec.marginMm)} mm", style = MaterialTheme.typography.bodyMedium)
@@ -124,7 +178,10 @@ fun A4LayoutEditorScreen(vm: WorkspaceViewModel, nav: NavController) {
                     spec = spec,
                     layout = layout,
                     page = page,
-                    imageFor = { id -> images[id] },
+                    imageFor = { id, side ->
+                        val p = images[id]
+                        if (side == CardSide.BACK) p?.second else p?.first
+                    },
                     showCutMarks = spec.showCutMarks,
                     onMove = { index, x, y -> vm.movePlacement(index, x, y) }
                 )

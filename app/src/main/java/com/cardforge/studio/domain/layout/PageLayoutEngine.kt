@@ -1,10 +1,12 @@
 package com.cardforge.studio.domain.layout
 
 import com.cardforge.studio.core.model.CardInstance
+import com.cardforge.studio.core.model.CardSide
 import com.cardforge.studio.core.model.LayoutResult
 import com.cardforge.studio.core.model.Orientation
 import com.cardforge.studio.core.model.Placement
 import com.cardforge.studio.core.model.SheetSpec
+import com.cardforge.studio.core.model.SidesMode
 import com.cardforge.studio.core.model.SizeMm
 import com.cardforge.studio.core.template.TemplateRegistry
 import kotlin.math.floor
@@ -18,25 +20,45 @@ import kotlin.math.floor
  */
 object PageLayoutEngine {
 
-    /** Expand each card's `quantity` into that many copies. */
+    /** One printable item: a card copy plus which side it prints. */
+    data class SheetItem(val card: CardInstance, val side: CardSide)
+
+    /** Expand each card's `quantity` into that many copies (front side). */
     fun expand(cards: List<CardInstance>): List<CardInstance> =
         cards.flatMap { c -> List(c.quantity.coerceAtLeast(1)) { c } }
 
     /**
-     * Lay out [cards] (quantities respected) onto sheets described by [spec].
-     * Cards are packed in a simple row-major grid; the grid cell size is the
-     * largest card in the set so the result stays tidy and cuttable.
+     * Expand into (card, side) items, honouring the sheet's [SidesMode]:
+     *  - FRONT_ONLY   : one front item per copy.
+     *  - SIDE_BY_SIDE : a front item *and* a back item per copy, printed together.
+     *  - DUPLEX       : one front item per copy; the exporter emits the back pass.
+     */
+    fun expandWithSides(cards: List<CardInstance>, spec: SheetSpec): List<SheetItem> {
+        val out = ArrayList<SheetItem>()
+        cards.forEach { c ->
+            repeat(c.quantity.coerceAtLeast(1)) {
+                out += SheetItem(c, CardSide.FRONT)
+                if (spec.sidesMode == SidesMode.SIDE_BY_SIDE) out += SheetItem(c, CardSide.BACK)
+            }
+        }
+        return out
+    }
+
+    /**
+     * Lay out [cards] (quantities and sides respected) onto sheets described by
+     * [spec]. Cards are packed in a simple row-major grid; the grid cell size is
+     * the largest card in the set so the result stays tidy and cuttable.
      */
     fun layout(cards: List<CardInstance>, spec: SheetSpec): LayoutResult {
-        val copies = expand(cards)
-        if (copies.isEmpty()) {
+        val items = expandWithSides(cards, spec)
+        if (items.isEmpty()) {
             return LayoutResult(emptyList(), pageCount = 1, overflowCount = 0, warnings = emptyList())
         }
 
         val printable = TemplateRegistry.printableAreaMm(spec)
         if (printable.widthMm <= 0.0 || printable.heightMm <= 0.0) {
             return LayoutResult(
-                emptyList(), 0, copies.size,
+                emptyList(), 0, items.size,
                 listOf("Margins leave no printable area. Reduce margins or choose a larger paper.")
             )
         }
@@ -44,9 +66,9 @@ object PageLayoutEngine {
         val warnings = mutableListOf<String>()
         val spacing = spec.spacingMm
 
-        // Columns/rows that fit, using the first card's size as the grid cell.
-        val cellW = copies.maxOf { it.sizeMm.widthMm }
-        val cellH = copies.maxOf { it.sizeMm.heightMm }
+        // Columns/rows that fit, using the largest card as the grid cell.
+        val cellW = items.maxOf { it.card.sizeMm.widthMm }
+        val cellH = items.maxOf { it.card.sizeMm.heightMm }
 
         val cols = floor((printable.widthMm + spacing) / (cellW + spacing)).toInt().coerceAtLeast(1)
         val rows = floor((printable.heightMm + spacing) / (cellH + spacing)).toInt().coerceAtLeast(1)
@@ -54,19 +76,21 @@ object PageLayoutEngine {
 
         if (perPage < 1) {
             warnings += "A single card is larger than the printable area. Choose a bigger paper or smaller card."
-        } else if (perPage < copies.size) {
-            warnings += "Requested ${copies.size} cards; $perPage fit per sheet. " +
+        } else if (perPage < items.size) {
+            warnings += "Requested ${items.size} card side(s); $perPage fit per sheet. " +
                 "Extra pages were added — nothing was resized."
         }
 
-        // Warn if a card's own footprint exceeds the cell (mixed sizes).
-        val oversized = copies.filter { it.sizeMm.widthMm > printable.widthMm || it.sizeMm.heightMm > printable.heightMm }
+        // Warn if a card's own footprint exceeds the sheet.
+        val oversized = items.filter {
+            it.card.sizeMm.widthMm > printable.widthMm || it.card.sizeMm.heightMm > printable.heightMm
+        }
         if (oversized.isNotEmpty()) {
             warnings += "${oversized.size} card(s) are larger than the printable area and may be clipped."
         }
 
-        val placements = ArrayList<Placement>(copies.size)
-        copies.forEachIndexed { index, card ->
+        val placements = ArrayList<Placement>(items.size)
+        items.forEachIndexed { index, item ->
             val page = index / perPage
             val slot = index % perPage
             val col = slot % cols
@@ -74,17 +98,18 @@ object PageLayoutEngine {
             val x = spec.marginMm + col * (cellW + spacing)
             val y = spec.marginMm + row * (cellH + spacing)
             placements += Placement(
-                cardId = card.id,
+                cardId = item.card.id,
                 page = page,
                 xMm = x,
                 yMm = y,
-                widthMm = card.sizeMm.widthMm,
-                heightMm = card.sizeMm.heightMm
+                widthMm = item.card.sizeMm.widthMm,
+                heightMm = item.card.sizeMm.heightMm,
+                side = item.side
             )
         }
 
         val pages = (placements.maxOfOrNull { it.page } ?: 0) + 1
-        val overflow = (copies.size - perPage * pages).coerceAtLeast(0)
+        val overflow = (items.size - perPage * pages).coerceAtLeast(0)
 
         return LayoutResult(
             placements = placements,

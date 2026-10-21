@@ -29,6 +29,14 @@ enum class FitMode(val label: String) {
 @Serializable
 enum class PaperKind(val label: String) { A4("A4"), A3("A3"), LETTER("Letter"), CUSTOM("Custom") }
 
+/** How the front and back sides of a card are laid out on the sheet. */
+@Serializable
+enum class SidesMode(val label: String) {
+    FRONT_ONLY("Front only"),
+    SIDE_BY_SIDE("Front + back side by side"),
+    DUPLEX("Duplex (front & back pages)")
+}
+
 /** A physical size in millimetres. */
 @Serializable
 data class SizeMm(val widthMm: Double, val heightMm: Double) {
@@ -108,7 +116,8 @@ data class SheetSpec(
     val spacingMm: Double = 4.0,
     val showCutMarks: Boolean = true,
     val showDashedCutLines: Boolean = false,
-    val snapToGrid: Boolean = true
+    val snapToGrid: Boolean = true,
+    val sidesMode: SidesMode = SidesMode.FRONT_ONLY
 )
 
 /** A concrete placement of one card copy on one sheet, in millimetres. */
@@ -119,7 +128,8 @@ data class Placement(
     val xMm: Double,
     val yMm: Double,
     val widthMm: Double,
-    val heightMm: Double
+    val heightMm: Double,
+    val side: CardSide = CardSide.FRONT
 )
 
 /** The full in-progress or saved project. */

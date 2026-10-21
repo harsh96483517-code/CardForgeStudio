@@ -7,16 +7,20 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.cardforge.studio.CardForgeApp
 import com.cardforge.studio.core.geometry.Geometry
+import com.cardforge.studio.core.layout.LayoutPresets
 import com.cardforge.studio.core.model.CardInstance
+import com.cardforge.studio.core.model.CardSide
 import com.cardforge.studio.core.model.CropQuad
 import com.cardforge.studio.core.model.DocumentTemplate
 import com.cardforge.studio.core.model.LayoutResult
 import com.cardforge.studio.core.model.Orientation
 import com.cardforge.studio.core.model.Project
 import com.cardforge.studio.core.model.SheetSpec
+import com.cardforge.studio.core.model.SidesMode
 import com.cardforge.studio.core.model.SizeMm
 import com.cardforge.studio.core.model.Units
 import com.cardforge.studio.core.template.TemplateRegistry
+import com.cardforge.studio.domain.crop.CardRegionSelector
 import com.cardforge.studio.domain.crop.PerspectiveCorrector
 import com.cardforge.studio.domain.export.PdfExporter
 import com.cardforge.studio.domain.export.PrintSide
@@ -344,6 +348,155 @@ class WorkspaceViewModel(app: Application) : AndroidViewModel(app) {
                 st.copy(busy = false, project = st.project.copy(cards = cards), message = "Updated card.")
             }
         }
+    }
+
+    // -------------------------------------------------- multi-card auto-split
+
+    /** Warp a page region to the card size and save it; returns the file path. */
+    private fun warpAndSave(page: ImportedPage, quad: CropQuad, size: SizeMm): String? {
+        val bmp = imageStore.load(page.imagePath) ?: return null
+        val px = IntArray(bmp.width * bmp.height)
+        bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
+        val outW = Units.mmToPx(size.widthMm, 300).toInt().coerceAtLeast(32)
+        val outH = Units.mmToPx(size.heightMm, 300).toInt().coerceAtLeast(32)
+        val warped = PerspectiveCorrector.warp(px, bmp.width, bmp.height, quad, outW, outH)
+        bmp.recycle()
+        val out = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)
+        out.setPixels(warped, 0, outW, 0, 0, outW, outH)
+        val path = imageStore.save(out)
+        out.recycle()
+        return path
+    }
+
+    private fun targetAspect(): Float =
+        (_state.value.selectedTemplate?.aspect ?: 1.585).toFloat()
+
+    /**
+     * Auto-split the active page into its front and back cards and drop them on
+     * one A4 sheet, side by side. This is the Aadhaar-style layout page flow.
+     */
+    fun autoSplitIntoFrontBack() {
+        val s = _state.value
+        val page = s.pages.getOrNull(s.activePage) ?: return
+        val template = s.selectedTemplate ?: TemplateRegistry.byId("aadhaar")!!
+        val size = resolvedSizeMm(template)
+
+        viewModelScope.launch {
+            _state.update { it.copy(busy = true) }
+            val result = withContext(Dispatchers.Default) {
+                val bmp = imageStore.load(page.imagePath)
+                if (bmp == null) null else {
+                    val px = IntArray(bmp.width * bmp.height)
+                    bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
+                    val regions = container.multiDetector.detect(
+                        px, bmp.width, bmp.height, maxCards = 4, targetAspect = targetAspect()
+                    )
+                    bmp.recycle()
+                    val pair = CardRegionSelector.pickFrontBack(regions, page.widthPx.toFloat())
+                    val paths = pair.map { warpAndSave(page, it.quad, size) }
+                    paths
+                }
+            }
+
+            if (result == null || result.isEmpty()) {
+                _state.update { it.copy(busy = false, message = "No cards detected. Crop manually.") }
+                return@launch
+            }
+
+            val front = result.getOrNull(0)
+            val back = result.getOrNull(1)
+            _state.update { st ->
+                val cards = st.project.cards + CardInstance(
+                    id = UUID.randomUUID().toString(),
+                    templateId = template.id,
+                    displayName = template.name + " (front + back)",
+                    frontImage = front,
+                    backImage = back,
+                    sizeMm = size,
+                    fit = template.defaultFit,
+                    quantity = 1
+                )
+                st.copy(
+                    busy = false,
+                    project = st.project.copy(
+                        cards = cards,
+                        templateId = template.id,
+                        sheet = LayoutPresets.twoUp(size).copy(sidesMode = SidesMode.SIDE_BY_SIDE)
+                    ),
+                    manualPositions = emptyMap(),
+                    message = if (back == null) "Front detected; back not found." else "Front + back added on one A4."
+                )
+            }
+            recomputeLayout()
+        }
+    }
+
+    /** Auto-split the active page into every card it contains, each its own card. */
+    fun autoSplitIntoIndividualCards() {
+        val s = _state.value
+        val page = s.pages.getOrNull(s.activePage) ?: return
+        val template = s.selectedTemplate ?: TemplateRegistry.byId("aadhaar")!!
+        val size = resolvedSizeMm(template)
+
+        viewModelScope.launch {
+            _state.update { it.copy(busy = true) }
+            val paths = withContext(Dispatchers.Default) {
+                val bmp = imageStore.load(page.imagePath)
+                if (bmp == null) emptyList() else {
+                    val px = IntArray(bmp.width * bmp.height)
+                    bmp.getPixels(px, 0, bmp.width, 0, 0, bmp.width, bmp.height)
+                    val regions = container.multiDetector.detect(
+                        px, bmp.width, bmp.height, maxCards = 8, targetAspect = targetAspect()
+                    )
+                    bmp.recycle()
+                    regions.mapNotNull { warpAndSave(page, it.quad, size) }
+                }
+            }
+            if (paths.isEmpty()) {
+                _state.update { it.copy(busy = false, message = "No cards detected. Crop manually.") }
+                return@launch
+            }
+            _state.update { st ->
+                val cards = st.project.cards + paths.mapIndexed { i, path ->
+                    CardInstance(
+                        id = UUID.randomUUID().toString(),
+                        templateId = template.id,
+                        displayName = "${template.name} ${i + 1}",
+                        frontImage = path,
+                        sizeMm = size,
+                        fit = template.defaultFit
+                    )
+                }
+                st.copy(busy = false, project = st.project.copy(cards = cards), message = "${paths.size} cards added.")
+            }
+            recomputeLayout()
+        }
+    }
+
+    fun setSidesMode(mode: SidesMode) {
+        _state.update {
+            it.copy(
+                project = it.project.copy(sheet = it.project.sheet.copy(sidesMode = mode)),
+                manualPositions = emptyMap()
+            )
+        }
+        recomputeLayout()
+    }
+
+    /**
+     * Apply a sheet preset (2-up / 4-up / ...). Quantities are left alone unless
+     * [quantityPerCard] is given.
+     */
+    fun applySheetPreset(spec: SheetSpec, quantityPerCard: Int? = null) {
+        _state.update { st ->
+            val cards = if (quantityPerCard == null) st.project.cards
+            else st.project.cards.map { it.copy(quantity = quantityPerCard.coerceIn(1, 200)) }
+            st.copy(
+                project = st.project.copy(sheet = spec, cards = cards),
+                manualPositions = emptyMap()
+            )
+        }
+        recomputeLayout()
     }
 
     fun removeCard(id: String) {

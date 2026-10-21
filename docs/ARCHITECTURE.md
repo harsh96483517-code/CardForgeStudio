@@ -258,3 +258,5 @@ Run with `./gradlew test`.
 4. Domain engines: detector, perspective, layout, export. ✔
 5. UI: 12 screens + ViewModels, wired to the engines. ✔
 6. Tests + README + CI (GitHub Actions → APK). ✔
+7. Multi-card auto-split (front + back), sides modes (side-by-side / duplex)
+   and centred 2-up…8-up presets. ✔

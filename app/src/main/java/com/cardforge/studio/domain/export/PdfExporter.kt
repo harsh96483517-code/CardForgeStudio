@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
+import com.cardforge.studio.core.model.CardSide
 import com.cardforge.studio.core.model.LayoutResult
 import com.cardforge.studio.core.model.Orientation
 import com.cardforge.studio.core.model.Placement
@@ -67,8 +68,17 @@ class PdfExporter {
 
                 val placements = byPage[pageIndex].orEmpty()
                 for (p in placements) {
-                    val mapped = if (side == PrintSide.BACK) mirror(p, paper.widthMm, paper.heightMm, options.flipEdge) else p
-                    drawCard(canvas, mapped, imageFor(p.cardId, side), paint, spec, options)
+                    // In duplex the pass decides the side; otherwise each placement
+                    // carries its own side (front+back side-by-side sheets).
+                    val effectiveSide = when {
+                        options.duplex -> side
+                        p.side == CardSide.BACK -> PrintSide.BACK
+                        else -> PrintSide.FRONT
+                    }
+                    val mapped = if (effectiveSide == PrintSide.BACK) {
+                        mirror(p, paper.widthMm, paper.heightMm, options.flipEdge)
+                    } else p
+                    drawCard(canvas, mapped, imageFor(p.cardId, effectiveSide), paint, spec, options)
                 }
                 if (options.includeCutMarks) drawCutMarks(canvas, placements, spec, options)
                 doc.finishPage(page)

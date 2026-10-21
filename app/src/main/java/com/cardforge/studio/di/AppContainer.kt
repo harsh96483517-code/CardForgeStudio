@@ -8,6 +8,8 @@ import com.cardforge.studio.data.repo.ProjectRepository
 import com.cardforge.studio.data.repo.SettingsRepository
 import com.cardforge.studio.domain.crop.CardDetector
 import com.cardforge.studio.domain.crop.GradientCardDetector
+import com.cardforge.studio.domain.crop.GradientMultiCardDetector
+import com.cardforge.studio.domain.crop.MultiCardDetector
 import com.cardforge.studio.domain.export.PdfExporter
 
 /**
@@ -21,5 +23,6 @@ class AppContainer(context: Context) {
     val settingsRepository: SettingsRepository = SettingsRepository(context)
     val customTemplateStore: CustomTemplateStore = CustomTemplateStore(context)
     val detector: CardDetector = GradientCardDetector()
+    val multiDetector: MultiCardDetector = GradientMultiCardDetector()
     val exporter: PdfExporter = PdfExporter()
 }

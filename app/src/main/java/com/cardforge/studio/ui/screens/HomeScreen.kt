@@ -100,6 +100,14 @@ fun HomeScreen(vm: WorkspaceViewModel, nav: NavController) {
             Text("Recent projects")
         }
 
+        OutlinedButton(
+            onClick = {
+                vm.setTemplate("aadhaar")
+                nav.navigate(Routes.IMPORT)
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) { Text("Aadhaar front + back → one A4") }
+
         if (project.cards.isEmpty()) {
             InfoBanner(
                 "No cards yet. Import a PDF or image of your own document to begin. " +

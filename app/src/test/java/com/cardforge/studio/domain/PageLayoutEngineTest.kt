@@ -1,9 +1,11 @@
 package com.cardforge.studio.domain
 
 import com.cardforge.studio.core.model.CardInstance
+import com.cardforge.studio.core.model.CardSide
 import com.cardforge.studio.core.model.Orientation
 import com.cardforge.studio.core.model.PaperKind
 import com.cardforge.studio.core.model.SheetSpec
+import com.cardforge.studio.core.model.SidesMode
 import com.cardforge.studio.core.model.SizeMm
 import com.cardforge.studio.domain.layout.PageLayoutEngine
 import org.junit.Assert.assertEquals
@@ -65,6 +67,22 @@ class PageLayoutEngineTest {
         val huge = SizeMm(500.0, 500.0)
         val result = PageLayoutEngine.layout(listOf(card(1, huge)), a4)
         assertTrue(result.warnings.isNotEmpty())
+    }
+
+    @Test
+    fun sideBySideModeEmitsFrontAndBackPerCopy() {
+        val spec = a4.copy(sidesMode = SidesMode.SIDE_BY_SIDE)
+        val result = PageLayoutEngine.layout(listOf(card(1)), spec)
+        assertEquals(2, result.placements.size)
+        assertEquals(CardSide.FRONT, result.placements[0].side)
+        assertEquals(CardSide.BACK, result.placements[1].side)
+    }
+
+    @Test
+    fun frontOnlyModeEmitsOnePlacement() {
+        val result = PageLayoutEngine.layout(listOf(card(1)), a4)
+        assertEquals(1, result.placements.size)
+        assertEquals(CardSide.FRONT, result.placements[0].side)
     }
 
     @Test

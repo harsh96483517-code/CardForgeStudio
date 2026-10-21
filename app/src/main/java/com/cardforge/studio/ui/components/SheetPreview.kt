@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.cardforge.studio.core.model.CardSide
 import com.cardforge.studio.core.model.LayoutResult
 import com.cardforge.studio.core.model.SheetSpec
 import com.cardforge.studio.core.template.TemplateRegistry
@@ -39,7 +40,7 @@ fun SheetPreview(
     spec: SheetSpec,
     layout: LayoutResult,
     page: Int = 0,
-    imageFor: (String) -> ImageBitmap? = { null },
+    imageFor: (cardId: String, side: CardSide) -> ImageBitmap? = { _, _ -> null },
     showCutMarks: Boolean = true,
     onMove: ((index: Int, xMm: Double, yMm: Double) -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -103,7 +104,7 @@ fun SheetPreview(
                     val t = (p.yMm * scale).toFloat()
                     val w = (p.widthMm * scale).toFloat()
                     val h = (p.heightMm * scale).toFloat()
-                    val bmp = imageFor(p.cardId)
+                    val bmp = imageFor(p.cardId, p.side)
                     if (bmp != null) {
                         drawImage(
                             image = bmp,

@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.cardforge.studio.core.model.CardSide
 import com.cardforge.studio.core.template.TemplateRegistry
 import com.cardforge.studio.ui.WorkspaceViewModel
 import com.cardforge.studio.ui.components.BannerTone
@@ -45,10 +46,11 @@ fun PrintPreviewScreen(vm: WorkspaceViewModel, nav: NavController) {
     var page by remember { mutableIntStateOf(0) }
     var showBack by remember { mutableStateOf(false) }
 
-    val images = remember(state.project.cards, showBack) {
+    val images = remember(state.project.cards) {
         state.project.cards.associate { c ->
-            val path = if (showBack) c.backImage else c.frontImage
-            c.id to (path?.let { runCatching { BitmapFactory.decodeFile(it)?.asImageBitmap() }.getOrNull() })
+            val f = c.frontImage?.let { runCatching { BitmapFactory.decodeFile(it)?.asImageBitmap() }.getOrNull() }
+            val b = c.backImage?.let { runCatching { BitmapFactory.decodeFile(it)?.asImageBitmap() }.getOrNull() }
+            c.id to (f to b)
         }
     }
 
@@ -72,7 +74,12 @@ fun PrintPreviewScreen(vm: WorkspaceViewModel, nav: NavController) {
             spec = spec,
             layout = layout,
             page = page,
-            imageFor = { id -> images[id] },
+            imageFor = { id, side ->
+                val p = images[id]
+                val auto = if (side == CardSide.BACK) p?.second else p?.first
+                // The manual front/back toggle overrides when a side is missing.
+                auto ?: if (showBack) p?.second else p?.first
+            },
             showCutMarks = spec.showCutMarks
         )
 
